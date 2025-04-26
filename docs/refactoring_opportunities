@@ -1,0 +1,15 @@
+# Suggested Refactoring Opportunities
+
+Based on an analysis of the codebase, the following refactoring opportunities have been identified:
+
+*   **Refactor _build_prompt method in ai_client.py**
+    *   Location: src/orchestrator_mcp_server/ai_client.py:100-180
+    *   Reason: The _build_prompt method is long and complex due to string concatenation and conditional logic. Using a templating approach or breaking it into smaller functions could improve readability and maintainability, adhering to KISS.
+
+*   **Refactor _resolve_includes in definition_service.py**
+    *   Location: src/orchestrator_mcp_server/definition_service.py:200-280
+    *   Reason: The _resolve_includes method combines file reading, include resolution, and recursive calls. Separating these concerns could simplify the logic and make it easier to understand and test, aligning with KISS.
+
+*   **Extract common error handling in engine.py**
+    *   Location: src/orchestrator_mcp_server/engine.py:200-350, 380-530
+    *   Reason: The error handling logic in advance_workflow and resume_workflow is largely duplicated. Extracting this common logic into a helper function or decorator would reduce redundancy and simplify the main methods, following the KISS principle.

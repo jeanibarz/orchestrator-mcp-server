@@ -1,0 +1,38 @@
+# .pre-commit-config.yaml
+# Pre-commit configuration using hooks from pre-commit/pre-commit-hooks
+# Includes only hooks that perform automatic fixes with minimal intervention.
+
+repos:
+-   repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+    -   id: trailing-whitespace
+        types: [text]
+        # Trims trailing whitespace.
+
+    -   id: end-of-file-fixer
+        types: [text]
+        # Ensures files end in a newline and only a newline.
+
+    -   id: fix-byte-order-marker
+        types: [text]
+        # Removes UTF-8 byte order markers.
+
+    -   id: mixed-line-ending
+        types: [text]
+        # Replaces or checks mixed line endings.
+        # Forces line endings to LF (Linux/macOS style) as preferred.
+        args: ['--fix=lf']
+
+    -   id: pretty-format-json
+        types: [json]
+        # Formats JSON files for consistency (indentation, sorted keys).
+        args:
+        - --autofix    # Enable automatic formatting.
+        - --indent=2   # Set indentation to 2 spaces (default).
+
+-   repo: https://github.com/psf/black
+    rev: 25.1.0
+    hooks:
+    -   id: black
+        types: [python]
