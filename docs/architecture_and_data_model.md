@@ -1506,94 +1506,26 @@ The following environment variables are used by the Workflow Orchestrator:
 # 11. Deployment Strategy
 
 ## 11.1. Artifact Description
-The Workflow Orchestrator is developed as a **TypeScript Node.js module**. The final deployable artifact consists of the compiled JavaScript code (output from `tsc`) and the necessary `node_modules` dependencies.
+The Workflow Orchestrator is developed as a **Python module**. The final deployable artifact consists of the Python code and the necessary dependencies.
 
 ## 11.2. Execution Environment
 The orchestrator is designed to run as a **local process** on the host machine (the "MCP Server"). It does not require containerization or external orchestration systems for its core functionality.
 
 ## 11.3. Dependencies
-* **Node.js Runtime:** A compatible version of Node.js must be installed on the host machine.
-* **NPM Packages:** Project dependencies must be installed via `npm install` (or equivalent package manager like `yarn`) in the project directory.
+* **Python Runtime:** A compatible version of Python must be installed on the host machine.
+* **Python Packages:** Project dependencies must be installed via `uv install` (or equivalent package manager like `pip`) in the project directory.
+* **Python Runtime:** A compatible version of Python must be installed on the host machine.
+* **Python Packages:** Project dependencies must be installed via `uv install` (or equivalent package manager like `pip`) in the project directory.
 
 ## 11.4. Local Components
-All primary components run locally alongside the Node.js process:
+All primary components run locally alongside the Python process:
 * **SQLite Database:** The database resides in a single file on the local filesystem, accessed directly by the State Persistence Module (path configured via `WORKFLOW_DB_PATH`).
 * **Workflow Definitions:** Workflow definition files (`index.md`, `steps/*.md`) are read directly from the local filesystem (base path configured via `WORKFLOW_DEFINITIONS_DIR`).
 
 ## 11.5. Running the Service
 1.  **Prerequisites:**
-    * Ensure Node.js is installed.
+    * Ensure Python is installed.
     * Ensure all required environment variables (see Section 10) are set in the execution environment.
     * Ensure the directories specified for `WORKFLOW_DEFINITIONS_DIR` and the directory containing the `WORKFLOW_DB_PATH` exist and have correct permissions.
-2.  **Installation:** Run `npm install` in the project root directory.
-3.  **Compilation:** Run `npm run build` (or `tsc`) to compile TypeScript to JavaScript (e.g., into a `dist` or `build` directory).
-4.  **Execution:** Start the application using Node.js, typically via an npm script like `npm start` or directly `node ./dist/main.js` (adjust path as needed). The specific command might depend on the entry point defined in `package.json`.
-
-# 12. Logging Strategy
-
-## 12.1. Overview
-The Workflow Orchestrator implements a comprehensive logging strategy to capture important events, errors, and interactions throughout the system. This is implemented through a dedicated `logger.py` module that configures logging to both console and file outputs.
-
-## 12.2. Logging Configuration
-- **Root Logger**: Outputs to both console and file
-- **Log Directory**: Configurable via environment variable, defaults to "logs"
-- **Log Files**:
-  - Main orchestrator logs: Configurable filename, defaults to "orchestrator.log"
-  - AI interactions: Separate log file, defaults to "ai_interactions.log"
-- **Log Format**: Includes timestamp, logger name, level, and message
-
-## 12.3. Log Levels
-The system uses standard log levels (DEBUG, INFO, WARNING, ERROR, CRITICAL) with the minimum level configurable via the LOG_LEVEL environment variable.
-
-## 12.4. Key Logging Points
-- **Error Logging**: As specified in Section 6.1, all significant errors are logged with sufficient detail
-- **Workflow State Changes**: Transitions between workflow states
-- **AI Interactions**: Requests to and responses from the AI service
-- **System Events**: Startup, shutdown, and other significant system events
-
-# 13. Testing Strategy
-
-## 13.1. Overall Goal
-The primary testing goal is to verify the correctness of the core orchestration logic, state transitions, history recording, and interaction flows as defined in the sequence diagrams (Section 4) and API specification (Section 7), under various conditions using realistic workflow definitions.
-
-## 13.2. Primary Method: Integration Testing with LLM Stubbing
-The core of the testing strategy relies on integration tests that exercise the API endpoints and internal components, but replace the actual calls to the external LLM service with a **stubbed AI Interaction Module**.
-
-* **Components Under Test:** API Layer, Orchestration Engine, Workflow Definition Service, State Persistence Module.
-* **Stubbed Component:** `AI Interaction Module` (`AbstractAIClient`). This stub will implement the same interface but return pre-defined, deterministic `AIResponse` objects (matching the JSON structure in Section 5.2) based on the specific test scenario and potentially the inputs it receives (like `current_step_name`, `report` status).
-* **Database:** Tests will interact with a dedicated test SQLite database file (e.g., `test_workflows.sqlite`) that can be reset before each test suite or individual test to ensure isolation.
-
-## 13.3. Test Scenarios
-Scenario tests will cover key functionalities:
-* **Workflow Loading:** Verify that valid workflow definitions are loaded correctly and invalid ones raise appropriate errors.
-* **Start Workflow:** Test the `/workflows/start` endpoint, ensuring the initial state is created correctly in the DB based on the (stubbed) AI's first step determination, and the API response is accurate.
-* **Advance Workflow:** Simulate calls to `/workflows/advance` with different `report` structures (e.g., status 'success', 'failure'). Verify:
-    * History entry is created correctly.
-    * The stubbed AI client receives the correct context, state, and report.
-    * The instance state (`current_step_name`, `context`, `status`) is updated correctly in the DB based on the stubbed `AIResponse`.
-    * The correct `next_step` instructions are returned in the API response.
-    * Branching logic within the workflow (dictated by the stubbed AI's `next_step_name`) is followed correctly.
-* **Resume Workflow:** Simulate calls to `/workflows/resume`. Verify:
-    * History entry for the resume attempt is created.
-    * The stubbed AI client receives the correct persisted state, assumed state, and report for reconciliation.
-    * The instance state is updated correctly based on the stubbed AI's reconciled `AIResponse`.
-    * The API response reflects the reconciled next step.
-* **Workflow Completion:** Test the transition to the `COMPLETED` status when the stubbed AI returns `"FINISH"` as the `next_step_name`. Verify the `completed_at` timestamp is set.
-* **Workflow Failure:** Test the transition to the `FAILED` status when the stubbed AI suggests it (`status_suggestion: "FAILED"`) or when critical non-AI errors occur (though AI errors themselves are stubbed out here).
-* **Error Handling (Pre-AI):** Test API responses and system behavior for errors occurring *before* an AI call would normally happen, such as:
-    * Invalid request format (400).
-    * Instance not found (404 on advance/resume).
-    * Workflow definition not found (404 on start, 500 on advance/resume if definition disappears).
-    * Persistence errors during reads/writes (500).
-
-## 13.4. Test Setup and Assertions
-* **Workflow Definitions:** Use dedicated, potentially simplified, workflow definition folders within the test suite structure.
-* **Test Runner:** Use a standard Node.js testing framework (e.g., Jest, Mocha).
-* **Stub Injection:** Configure the application or directly inject the stubbed `AI Interaction Module` during test setup.
-* **Assertions:** Tests will assert on:
-    * API response status codes.
-    * API response body structure and key values (`instance_id`, `next_step.step_name`, `current_context`).
-    * State within the test SQLite database (`workflow_instances` and `workflow_history` tables).
-
-## 13.5. Unit Tests
-While integration testing is the primary focus, **Unit Tests** should be written for individual utility functions, complex parsing logic within the Workflow Definition Service, or specific validation logic where appropriate. These tests should be fast and isolated, mocking any external dependencies (like filesystem access for parser tests).
+2.  **Installation:** Run `uv install` in the project root directory.
+3.  **Execution:** Start the application using Python, typically via a command like `uv run python -m orchestrator_mcp_server`. The specific command might depend on the project's entry point.
