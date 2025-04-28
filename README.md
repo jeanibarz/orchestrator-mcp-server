@@ -52,7 +52,7 @@ graph LR
 
 ## Workflows
 
-Workflows are defined in subdirectories within the `workflows/` directory. Each workflow has:
+Workflows are defined in subdirectories within the `WORKFLOW_DEFINITIONS_DIR` directory specified in the MCP server settings. Each workflow has:
 
 *   `index.md`: Defines the overall goal and lists the steps.
 *   `steps/`: A directory containing individual Markdown files for each step, including `# Orchestrator Guidance` and `# Client Instructions`.
@@ -62,8 +62,6 @@ Workflows are defined in subdirectories within the `workflows/` directory. Each 
 *   REFACTOR_WITH_TESTS
 *   RESUME
 *   SAVE
-*   SPRINT_TASK
-*   WORK
 
 (See `docs/architecture_and_data_model.md#8-workflow-definition-service-details` for more on the definition format).
 
