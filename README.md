@@ -83,13 +83,15 @@ This server provides the following MCP tools:
 
 ## Configuration
 
-The server is configured via environment variables:
+The server is configured via environment variables. Paths can be specified as relative to the current working directory or as absolute paths:
 
-*   `WORKFLOW_DEFINITIONS_DIR` (Required): Path to the workflow definitions directory (e.g., `./workflows`).
-*   `WORKFLOW_DB_PATH` (Required): Path to the SQLite database file (e.g., `./data/workflows.sqlite`).
+*   `WORKFLOW_DEFINITIONS_DIR` (Required): Path to the workflow definitions directory (e.g., `./workflows` or `/home/user/projects/orchestrator-mcp-server/workflows`).
+*   `WORKFLOW_DB_PATH` (Required): Path to the SQLite database file (e.g., `./data/workflows.sqlite` or `/home/user/projects/orchestrator-mcp-server/data/workflows.sqlite`).
+*   `GEMINI_MODEL_NAME` (Required, unless `USE_STUB_AI_CLIENT` is `true`): The name of the Gemini model to use (e.g., `gemini-2.5-flash-latest`).
+*   `USE_STUB_AI_CLIENT` (Optional): Set to `true` to use a stubbed AI client for testing, bypassing the need for AI service configuration (default: `false`).
 *   `LOG_LEVEL` (Optional): Logging level (default: `info`).
-*   `AI_SERVICE_ENDPOINT` (Optional): URL for the LLM service API.
-*   `AI_SERVICE_API_KEY` (Optional): API key for the LLM service.
+*   `AI_SERVICE_ENDPOINT` (Optional): URL for the LLM service API (only used if not using the stub client).
+*   `AI_SERVICE_API_KEY` (Optional): API key for the LLM service (only used if not using the stub client).
 *   `AI_REQUEST_TIMEOUT_MS` (Optional): Timeout for AI requests in milliseconds (default: `30000`).
 
 ## Quickstart / Running the Server
@@ -106,7 +108,29 @@ The server is configured via environment variables:
     ```bash
     uv run python -m orchestrator_mcp_server
     ```
-    Alternatively, use the command specified in your MCP client configuration.
+    Alternatively, if you have installed the server using `pipx install .`, you can run the `orchestrator-mcp-server` command directly. By default, the server uses relative paths (`./workflows` and `./data/workflows.sqlite`) for workflow definitions and the database. To use these default paths, you must run the `orchestrator-mcp-server` command from the project's root directory (`/home/jean/git/orchestrator-mcp-server`). If you set the `WORKFLOW_DEFINITIONS_DIR` and `WORKFLOW_DB_PATH` environment variables to absolute paths (see Configuration), you can run the `orchestrator-mcp-server` command from any directory.
+
+### Running with Cline
+
+To run the orchestrator as an MCP server within Cline, add the following configuration to the `mcpServers` content of your `cline_mcp_settings.json` file:
+
+```json
+"orchestrator-mcp-server": {
+      "autoApprove": [],
+      "disabled": false,
+      "timeout": 60,
+      "command": "orchestrator-mcp-server",
+      "env": {
+        "WORKFLOW_DEFINITIONS_DIR": "/home/YOUR_USERNAME/git/orchestrator-mcp-server/workflows",
+        "WORKFLOW_DB_PATH": "/home/YOUR_USERNAME/git/orchestrator-mcp-server/workflow_state.db",
+        "GEMINI_MODEL_NAME": "gemini-2.5-flash-preview-04-17",
+        "GEMINI_API_KEY": "YOUR__API_KEY"
+      },
+      "transportType": "stdio"
+    }
+```
+
+Remember to replace `"YOUR_USERNAME"` with your actual username and `"YOUR_ANONYMIZED_API_KEY"` with your actual Gemini API key and adjust the paths if your project is located elsewhere.
 
 ## Development Status
 

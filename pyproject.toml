@@ -41,7 +41,7 @@ requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project.scripts]
-orchestrator-mcp-server = "orchestrator_mcp_server.server:main"
+orchestrator-mcp-server = "orchestrator_mcp_server.__main__:run_server"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
