@@ -1,0 +1,12 @@
+You MUST ensure that no file exceeds 500 lines. If some files exceeds that length, refactor the code into separate, more granular modules.
+Beware to NEVER add this kind of content when using write_in_file:
+"""
+</final_file_content>
+"""
+
+If having PYTHONPATH issues, ensure the package is installed in editable mode.
+Python dependancies are managed by uv. Ensure you use uv to install new dependancies (or to install the package in editable mode).
+
+*   **SAVE Command:** When the user says "SAVE", stop the current work immediately. Dump all current progress, context, thoughts, and next steps into `MEMORY_BANK/TASK_PROGRESS.md` in sufficient detail to allow resuming the task later, even after a complete memory loss. After saving, ask the user whether to continue with the current task or stop.
+
+*   **RESUME Command:** When the user says "RESUME", start the workflow by checking `MEMORY_BANK/TASK_PROGRESS.md`. If the file contains information about a previous task, use it to resume from where it was left off. If the file is empty or doesn't contain actionable progress information, inform the user and ask if a new task should be started.

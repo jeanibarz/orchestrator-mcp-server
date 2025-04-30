@@ -128,8 +128,8 @@ def test_list_workflows(workflow_engine: OrchestrationEngine) -> None:
 
 def test_start_workflow(workflow_engine: OrchestrationEngine) -> None:
     """Test starting a new workflow instance."""
-    # Replace 'SPRINT_TASK' with a valid workflow name from your workflows directory
-    workflow_name = "SPRINT_TASK"  # Example workflow name
+    # Use the dedicated test workflow
+    workflow_name = "TEST_INTEGRATION"
     initial_context = {"user": "test_user", "task_id": 123}
 
     try:
@@ -178,15 +178,15 @@ def test_start_workflow(workflow_engine: OrchestrationEngine) -> None:
 
 def test_advance_workflow_success(workflow_engine: OrchestrationEngine) -> None:
     """Test advancing a workflow instance with a 'success' report."""
-    # First, start a workflow instance
-    workflow_name = "SPRINT_TASK"  # Example workflow name
+    # First, start a workflow instance using the test workflow
+    workflow_name = "TEST_INTEGRATION"
     initial_context = {"user": "test_user"}
     try:
         start_output = workflow_engine.start_workflow(workflow_name, initial_context)
         instance_id = start_output.instance_id
         first_step_name = start_output.next_step["step_name"]  # Should be 'Start'
 
-        # Now, advance the workflow with a success report for the first step
+        # Now, advance the workflow with a success report for the 'Start' step
         report = ReportPayload(
             step_id=first_step_name,
             result={"status": "completed"},  # Dummy result
@@ -254,15 +254,15 @@ def test_advance_workflow_success(workflow_engine: OrchestrationEngine) -> None:
 
 def test_advance_workflow_failure(workflow_engine: OrchestrationEngine) -> None:
     """Test advancing a workflow instance with a 'failure' report."""
-    # First, start a workflow instance
-    workflow_name = "SPRINT_TASK"  # Example workflow name
+    # First, start a workflow instance using the test workflow
+    workflow_name = "TEST_INTEGRATION"
     initial_context = {"user": "test_user"}
     try:
         start_output = workflow_engine.start_workflow(workflow_name, initial_context)
         instance_id = start_output.instance_id
         first_step_name = start_output.next_step["step_name"]  # Should be 'Start'
 
-        # Now, advance the workflow with a failure report
+        # Now, advance the workflow with a failure report for the 'Start' step
         report = ReportPayload(
             step_id=first_step_name,
             result=None,  # Dummy result
@@ -331,8 +331,8 @@ def test_advance_workflow_failure(workflow_engine: OrchestrationEngine) -> None:
 
 def test_get_workflow_status(workflow_engine: OrchestrationEngine) -> None:
     """Test retrieving the status of a workflow instance."""
-    # First, start a workflow instance
-    workflow_name = "SPRINT_TASK"  # Example workflow name
+    # First, start a workflow instance using the test workflow
+    workflow_name = "TEST_INTEGRATION"
     initial_context = {"user": "status_checker"}
     try:
         start_output = workflow_engine.start_workflow(workflow_name, initial_context)
@@ -369,8 +369,8 @@ def test_get_workflow_status(workflow_engine: OrchestrationEngine) -> None:
 
 def test_resume_workflow(workflow_engine: OrchestrationEngine) -> None:
     """Test resuming a workflow instance."""
-    # First, start a workflow instance
-    workflow_name = "SPRINT_TASK"  # Example workflow name
+    # First, start a workflow instance using the test workflow
+    workflow_name = "TEST_INTEGRATION"
     initial_context = {"user": "resumer"}
     try:
         start_output = workflow_engine.start_workflow(workflow_name, initial_context)
@@ -447,8 +447,8 @@ def test_resume_workflow(workflow_engine: OrchestrationEngine) -> None:
 
 def test_workflow_completion(workflow_engine: OrchestrationEngine) -> None:
     """Test advancing a workflow to completion using a 'FINISH' report status."""
-    # First, start a workflow instance
-    workflow_name = "SPRINT_TASK"  # Example workflow name
+    # First, start a workflow instance using the test workflow
+    workflow_name = "TEST_INTEGRATION"
     initial_context = {"user": "completer"}
     try:
         start_output = workflow_engine.start_workflow(workflow_name, initial_context)

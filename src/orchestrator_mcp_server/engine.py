@@ -2,6 +2,7 @@
 
 import logging
 import uuid
+import re
 from datetime import datetime, timezone
 from typing import Any
 
@@ -41,10 +42,6 @@ setup_logger()
 # Define engine-specific errors if needed, or reuse existing ones
 class OrchestrationEngineError(Exception):
     """Base exception for Orchestration Engine errors."""
-
-
-class WorkflowAlreadyCompletedError(OrchestrationEngineError):
-    """Exception raised when attempting to advance/resume a completed workflow."""
 
 
 class OrchestrationEngine:
@@ -90,25 +87,36 @@ class OrchestrationEngine:
         instance_id = str(uuid.uuid4())
 
         try:
-            # Get the ordered list of steps from the definition service
-            step_list = self.definition_service.get_step_list(workflow_name)
+            # Get the full definition blob to find the first step
+            definition_blob = self.definition_service.get_full_definition_blob(
+                workflow_name
+            )
 
-            # Select the first step from the list
-            if not step_list:
-                # This case should ideally be caught by definition service validation,
-                # but handle defensively.
-                msg = f"Workflow '{workflow_name}' has no steps defined."
-                raise DefinitionParsingError(msg)  # Or a more specific engine error
+            # Determine the first step directly from the definition blob
+            first_step_name = None
+            # Regex to find the first step link in the markdown list
+            step_link_pattern = re.compile(
+                r"^[ \t]*(\d+\.|[-*+]) [ \t]*\[([^\]]+)\]\(([^)]+\.md)\)",
+                re.MULTILINE,
+            )
+            match = step_link_pattern.search(definition_blob)
+            if match:
+                first_step_name = match.group(2).strip()
+                logger.info(
+                    f"Determined first step for workflow '{workflow_name}': {first_step_name}"
+                )
+            else:
+                msg = f"Could not determine the first step from workflow definition '{workflow_name}'."
+                logger.error(msg)
+                raise DefinitionParsingError(msg)
 
-            first_step_name = step_list[0]
-
-            # Initial context is just the provided initial_context
-            current_context = initial_context if initial_context else {}
+            # Use the initial context provided by the user
+            current_context = initial_context.copy() if initial_context else {}
 
             initial_state = WorkflowInstance(
                 instance_id=instance_id,
                 workflow_name=workflow_name,
-                current_step_name=first_step_name,  # Use the first step from the list
+                current_step_name=first_step_name,  # Use the determined first step
                 status="RUNNING",
                 context=current_context,
                 completed_at=None,
@@ -126,19 +134,19 @@ class OrchestrationEngine:
                 next_step={
                     "step_name": first_step_name,
                     "instructions": instructions,
-                },  # Use the first step name
+                },
                 current_context=current_context,
             )
 
-        except (DefinitionNotFoundError, DefinitionParsingError):
-            raise
-        except AIServiceError as e:
-            msg = f"AI service error during workflow start: {e}"
-            raise OrchestrationEngineError(msg) from e
+        except (DefinitionNotFoundError, DefinitionParsingError) as e:
+            # Re-raise definition errors directly
+            raise e
         except PersistenceError as e:
+            # Wrap persistence errors
             msg = f"Persistence error during workflow start: {e}"
             raise OrchestrationEngineError(msg) from e
         except Exception as e:
+            # Wrap any other unexpected errors
             msg = f"An unexpected error occurred during workflow start: {e}"
             raise OrchestrationEngineError(msg) from e
 
@@ -485,48 +493,32 @@ class OrchestrationEngine:
                 current_context=updated_state.context,  # Return context from the updated state
             )
 
-        # Removed specific InstanceNotFoundError handler to allow generic wrapper below
         except (
             DefinitionServiceError,
             PersistenceError,
             AIServiceError,
             InstanceNotFoundError,
-        ) as err:  # Add InstanceNotFoundError here
+        ) as err:
             logger.exception(
                 "Error processing advance for instance %s: %s", instance_id, err
             )
-            try:
-                # Attempt to get state only if the error wasn't InstanceNotFoundError initially
-                if not isinstance(err, InstanceNotFoundError):
+            # Attempt to set instance status to FAILED if possible and appropriate
+            if not isinstance(err, InstanceNotFoundError) and not isinstance(
+                err, PersistenceError
+            ):
+                try:
                     state_to_fail = self.persistence_repo.get_instance(instance_id)
                     if state_to_fail.status not in ["COMPLETED", "FAILED"]:
                         state_to_fail.status = "FAILED"
                         state_to_fail.completed_at = datetime.now(timezone.utc)
-                        if not isinstance(err, PersistenceError):
-                            self.persistence_repo.update_instance(state_to_fail)
-                        else:
-                            logger.warning(
-                                "Original error was PersistenceError for instance %s. Skipping FAILED status update.",
-                                instance_id,
-                            )
-                else:
-                    # Log that we can't update status because the instance wasn't found
-                    logger.warning(
-                        "Instance %s not found, cannot set status to FAILED.",
+                        self.persistence_repo.update_instance(state_to_fail)
+                except Exception:
+                    logger.exception(
+                        "Failed to update instance %s to FAILED status after initial error.",
                         instance_id,
                     )
 
-            except Exception:
-                logger.exception(
-                    "Failed to update instance %s to FAILED status after initial error.",
-                    instance_id,
-                )
-                # The original code had a redundant update attempt here. Removed.
-
             msg = f"Error processing advance for instance {instance_id}: {err}"
-            # RET506 Fix: Remove unnecessary else
-            # The original code had an if/else that both raised the same exception type.
-            # We can simplify this by just raising it once after the common message construction.
             raise OrchestrationEngineError(msg) from err
 
         except Exception as err:
@@ -535,7 +527,7 @@ class OrchestrationEngine:
                 instance_id,
                 err,
             )
-            msg = f"An unexpected error occurred during workflow advance for instance {instance_id}: {err}"
+            # Attempt to set instance status to FAILED for unexpected errors
             try:
                 state_to_fail = self.persistence_repo.get_instance(instance_id)
                 if state_to_fail.status not in ["COMPLETED", "FAILED"]:
@@ -548,6 +540,7 @@ class OrchestrationEngine:
                     instance_id,
                 )
 
+            msg = f"An unexpected error occurred during workflow advance for instance {instance_id}: {err}"
             raise OrchestrationEngineError(msg) from err
 
     def resume_workflow(
@@ -611,58 +604,32 @@ class OrchestrationEngine:
                 current_context=updated_state.context,  # Return context from the updated state
             )
 
-        # Removed specific InstanceNotFoundError handler to allow generic wrapper below
         except (
             DefinitionServiceError,
             PersistenceError,
             AIServiceError,
             InstanceNotFoundError,
-        ) as err:  # Add InstanceNotFoundError here
-            try:
-                # Attempt to get state only if the error wasn't InstanceNotFoundError initially
-                if not isinstance(err, InstanceNotFoundError):
+        ) as err:
+            logger.exception(
+                "Error processing resume for instance %s: %s", instance_id, err
+            )
+            # Attempt to set instance status to FAILED if possible and appropriate
+            if not isinstance(err, InstanceNotFoundError) and not isinstance(
+                err, PersistenceError
+            ):
+                try:
                     state_to_fail = self.persistence_repo.get_instance(instance_id)
                     if state_to_fail.status not in ["COMPLETED", "FAILED"]:
                         state_to_fail.status = "FAILED"
                         state_to_fail.completed_at = datetime.now(timezone.utc)
-                        if not isinstance(err, PersistenceError):
-                            self.persistence_repo.update_instance(state_to_fail)
-                        else:
-                            logger.warning(
-                                "Original error was PersistenceError for instance %s. Skipping FAILED status update.",
-                                instance_id,
-                            )
-                else:
-                    # Log that we can't update status because the instance wasn't found
-                    logger.warning(
-                        "Instance %s not found, cannot set status to FAILED.",
+                        self.persistence_repo.update_instance(state_to_fail)
+                except Exception:
+                    logger.exception(
+                        "Failed to update instance %s to FAILED status after initial error.",
                         instance_id,
                     )
 
-            except Exception:
-                logger.exception(
-                    "Failed to update instance %s to FAILED status after initial error.",
-                    instance_id,
-                )
-                if state_to_fail.status not in ["COMPLETED", "FAILED"]:
-                    state_to_fail.status = "FAILED"
-                    state_to_fail.completed_at = datetime.now(timezone.utc)
-                    if not isinstance(err, PersistenceError):
-                        self.persistence_repo.update_instance(state_to_fail)
-                    else:
-                        logger.warning(
-                            "Original error was PersistenceError for instance %s. Skipping FAILED status update.",
-                            instance_id,
-                        )
-            except Exception:
-                logger.exception(
-                    "Failed to update instance %s to FAILED status after initial error.",
-                    instance_id,
-                )
-
             msg = f"Error processing resume for instance {instance_id}: {err}"
-            # RET506 Fix: Remove unnecessary else
-            # Similar to the advance_workflow case, simplify the raise.
             raise OrchestrationEngineError(msg) from err
 
         except Exception as err:

@@ -160,7 +160,7 @@ def test_start_workflow_success_no_initial_context(
     """Test start_workflow success path with no initial context."""
     workflow_name = "TEST_WF"
     initial_context: dict[str, Any] | None = None  # Added type hint
-    expected_first_step = "Mock First Step"
+    expected_first_step = "Step 1"  # Align with mock_definition_service.get_step_list
     expected_instructions = "Mocked client instructions"
     expected_ai_response = AIResponse(
         next_step_name=expected_first_step,
@@ -218,7 +218,7 @@ def test_start_workflow_success_with_initial_context(
     """Test start_workflow success path with initial context provided."""
     workflow_name = "TEST_WF_CTX"
     initial_context: dict[str, Any] = {"user_key": "user_value"}  # Added type hint
-    expected_first_step = "Mock First Step Context"
+    expected_first_step = "Step 1"  # Align with mock_definition_service.get_step_list
     expected_instructions = "Mocked client instructions context"
     expected_ai_response = AIResponse(
         next_step_name=expected_first_step,
@@ -259,27 +259,37 @@ def test_start_workflow_success_with_initial_context(
 
 
 def test_start_workflow_handles_definition_not_found(
-    engine: OrchestrationEngine, mock_definition_service: MagicMock
+    engine: OrchestrationEngine,
+    mock_definition_service: MagicMock,
+    mock_ai_client: MagicMock,  # Added mock_ai_client fixture
+    mock_persistence_repo: MagicMock,  # Added mock_persistence_repo fixture
 ) -> None:
     """Test start_workflow when definition service raises DefinitionNotFoundError."""
     workflow_name = "NON_EXISTENT_WF"
     initial_context: dict[str, Any] = {}  # Added type hint
+    # Mock get_full_definition_blob to raise the error
     mock_definition_service.get_full_definition_blob.side_effect = (
         DefinitionNotFoundError("Not found")
     )
 
-    with pytest.raises(DefinitionNotFoundError):
+    with pytest.raises(DefinitionNotFoundError, match="Not found"):
         engine.start_workflow(workflow_name, initial_context)
 
+    # Assert that get_step_list was called, but subsequent methods were not
     mock_definition_service.get_full_definition_blob.assert_called_once_with(
         workflow_name
     )
+    mock_definition_service.get_full_definition_blob.assert_not_called()
+    mock_ai_client.determine_first_step.assert_called_once()
+    mock_persistence_repo.create_instance.assert_not_called()
+    mock_definition_service.get_step_client_instructions.assert_not_called()
 
 
 def test_start_workflow_handles_ai_error(
     engine: OrchestrationEngine,
     mock_definition_service: MagicMock,
     mock_ai_client: MagicMock,
+    mock_persistence_repo: MagicMock,
 ) -> None:
     """Test start_workflow when AI client raises an error."""
     workflow_name = "AI_FAIL_WF"
@@ -293,12 +303,18 @@ def test_start_workflow_handles_ai_error(
     ):
         engine.start_workflow(workflow_name, initial_context)
 
+    # Assert that calls up to the point of AI failure were made
+    mock_definition_service.get_step_list.assert_called_once_with(workflow_name)
     mock_definition_service.get_full_definition_blob.assert_called_once_with(
         workflow_name
     )
     mock_ai_client.determine_first_step.assert_called_once_with(
         "Mocked definition blob"
     )
+    # Subsequent methods should not be called
+    mock_persistence_repo.create_instance.assert_not_called()
+    mock_definition_service.get_step_client_instructions.assert_not_called()
+    mock_persistence_repo.update_instance.assert_not_called()  # No instance update on start failure
 
 
 def test_start_workflow_handles_persistence_error(
@@ -323,13 +339,15 @@ def test_start_workflow_handles_persistence_error(
         ):
             engine.start_workflow(workflow_name, initial_context)
 
+    # Assert that calls up to the point of persistence failure were made
     mock_definition_service.get_full_definition_blob.assert_called_once_with(
         workflow_name
     )
-    mock_ai_client.determine_first_step.assert_called_once_with(
-        "Mocked definition blob"
-    )
-    mock_persistence_repo.create_instance.assert_called_once()  # Should still be called
+    mock_persistence_repo.create_instance.assert_called_once()
+    # Subsequent methods should not be called
+    mock_ai_client.determine_first_step.assert_not_called()
+    mock_definition_service.get_step_client_instructions.assert_not_called()
+    mock_persistence_repo.update_instance.assert_not_called()  # No instance update on start failure
 
 
 # --- Tests for advance_workflow ---
@@ -1662,7 +1680,7 @@ def test_resume_workflow_generic_exception(
     with pytest.raises(
         OrchestrationEngineError,
         match=rf"An unexpected error occurred during workflow resume for instance {instance_id}: {generic_error_message}",
-    ):  # Correct indentation, use raw string for regex
+    ):
         engine.resume_workflow(
             instance_id, assumed_step, report, context_updates
         )  # Correct indentation
@@ -1685,3 +1703,94 @@ def test_resume_workflow_generic_exception(
 
 
 # TODO: Add tests for _update_and_persist_state status suggestion logic
+
+
+def test_update_and_persist_state_finish_suggestion(
+    engine: OrchestrationEngine,
+    mock_persistence_repo: MagicMock,
+    current_instance_data: WorkflowInstance,
+):
+    """Test _update_and_persist_state sets status to COMPLETED if AI suggests FINISH."""
+    ai_response = AIResponse(
+        next_step_name="FINISH",
+        updated_context={"final_data": True},
+        status_suggestion="RUNNING",  # AI suggests RUNNING, but FINISH should override
+        reasoning="Workflow completed.",
+    )
+    initial_context = current_instance_data.context.copy()
+    context_updates = {"user_final": "value"}
+    merged_context = engine._merge_contexts(initial_context, context_updates)
+
+    updated_instance, new_status = engine._update_and_persist_state(
+        current_instance_data, ai_response, merged_context
+    )
+
+    assert new_status == "COMPLETED"
+    assert updated_instance.status == "COMPLETED"
+    assert updated_instance.current_step_name == "FINISH"
+    assert updated_instance.context == merged_context
+    assert updated_instance.completed_at is not None
+    mock_persistence_repo.update_instance.assert_called_once_with(updated_instance)
+
+
+def test_update_and_persist_state_valid_status_suggestion(
+    engine: OrchestrationEngine,
+    mock_persistence_repo: MagicMock,
+    current_instance_data: WorkflowInstance,
+):
+    """Test _update_and_persist_state sets status based on valid AI suggestion."""
+    ai_response = AIResponse(
+        next_step_name="NextStep",
+        updated_context={"ai_status_update": True},
+        status_suggestion="SUSPENDED",  # AI suggests SUSPENDED
+        reasoning="Waiting for user input.",
+    )
+    initial_context = current_instance_data.context.copy()
+    context_updates = {"user_update": "value"}
+    merged_context = engine._merge_contexts(initial_context, context_updates)
+
+    updated_instance, new_status = engine._update_and_persist_state(
+        current_instance_data, ai_response, merged_context
+    )
+
+    assert new_status == "SUSPENDED"
+    assert updated_instance.status == "SUSPENDED"
+    assert updated_instance.current_step_name == "NextStep"
+    assert updated_instance.context == merged_context
+    assert updated_instance.completed_at is None  # Not completed or failed
+    mock_persistence_repo.update_instance.assert_called_once_with(updated_instance)
+
+
+def test_update_and_persist_state_invalid_status_suggestion(
+    engine: OrchestrationEngine,
+    mock_persistence_repo: MagicMock,
+    current_instance_data: WorkflowInstance,
+):
+    """Test _update_and_persist_state ignores invalid AI status suggestion."""
+    ai_response = AIResponse(
+        next_step_name="NextStep",
+        updated_context={"ai_status_update": True},
+        status_suggestion="INVALID_STATUS",  # AI suggests invalid status
+        reasoning="Trying to set invalid status.",
+    )
+    initial_context = current_instance_data.context.copy()
+    context_updates = {"user_update": "value"}
+    merged_context = engine._merge_contexts(initial_context, context_updates)
+
+    # Capture logs to check for warning
+    with patch("orchestrator_mcp_server.engine.logger") as mock_logger:
+        updated_instance, new_status = engine._update_and_persist_state(
+            current_instance_data, ai_response, merged_context
+        )
+
+    assert new_status == "RUNNING"  # Status should remain unchanged
+    assert updated_instance.status == "RUNNING"
+    assert updated_instance.current_step_name == "NextStep"
+    assert updated_instance.context == merged_context
+    assert updated_instance.completed_at is None
+    mock_persistence_repo.update_instance.assert_called_once_with(updated_instance)
+    mock_logger.warning.assert_called_once()
+    assert (
+        "AI suggested invalid status 'INVALID_STATUS'"
+        in mock_logger.warning.call_args[0][0]
+    )

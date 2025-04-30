@@ -40,7 +40,9 @@ from .models import (
 from .persistence import WorkflowPersistenceRepository
 
 # --- Configuration ---
-WORKFLOW_DEFINITIONS_DIR = os.environ.get("WORKFLOW_DEFINITIONS_DIR", "./workflows")
+WORKFLOW_DEFINITIONS_DIR = os.environ.get(
+    "WORKFLOW_DEFINITIONS_DIR", "./test_workflows"
+)
 WORKFLOW_DB_PATH = os.environ.get("WORKFLOW_DB_PATH", "./data/workflows.sqlite")
 # Default to NOT using stub client unless explicitly set
 USE_STUB_AI_CLIENT = os.environ.get("USE_STUB_AI_CLIENT", "false").lower() == "true"
@@ -81,10 +83,9 @@ async def server_lifespan(
         # Initialize Persistence Repository
         app_context.persistence_repo = WorkflowPersistenceRepository()
 
-        # Initialize Workflow Definition Service
-        app_context.definition_service = WorkflowDefinitionService(
-            WORKFLOW_DEFINITIONS_DIR
-        )
+        # Initialize Workflow Definition Service with explicit path
+        defs_dir = os.environ.get("WORKFLOW_DEFINITIONS_DIR", "./test_workflows")
+        app_context.definition_service = WorkflowDefinitionService(defs_dir)
 
         # Initialize AI Client
         if USE_STUB_AI_CLIENT:
@@ -226,10 +227,9 @@ def get_workflow_status(input_data: GetWorkflowStatusInput, ctx: Context) -> str
         instance_state = repo.get_instance(input_data.instance_id)
         output = GetWorkflowStatusOutput.model_validate(instance_state.model_dump())
         return output.model_dump_json(indent=2)
-    except InstanceNotFoundError:
-        return json.dumps(
-            {"error": f"Workflow instance '{input_data.instance_id}' not found."}
-        )
+    except InstanceNotFoundError as e:
+        print(f"Instance not found: {e}", file=sys.stderr)
+        return json.dumps({"error": f"Instance '{input_data.instance_id}' not found"})
     except (PersistenceError, ValidationError) as e:
         print(f"Error in get_workflow_status: {e}", file=sys.stderr)
         return json.dumps(
@@ -248,7 +248,18 @@ def get_workflow_status(input_data: GetWorkflowStatusInput, ctx: Context) -> str
 
 @mcp.tool()
 def advance_workflow(input_data: AdvanceWorkflowInput, ctx: Context) -> str:
-    """Reports the outcome of the previously issued step and requests the next step."""
+    """
+    Reports the outcome of the previously completed step and requests the next step.
+
+    This tool is used by the AI Client (e.g., the AI assistant executing the workflow)
+    to communicate the result of executing a workflow step back to the Orchestrator (this MCP server).
+    Based on the AI Client's report and the workflow definition, the Orchestrator determines the next step.
+
+    The response contains the 'next_step' with 'instructions'. The AI Client (the assistant)
+    MUST follow these instructions precisely to interact with the end User
+    or perform other required actions. Accurate execution and reporting are
+    essential for correct workflow progression.
+    """
     try:
         engine = _get_engine(ctx)
         result = engine.advance_workflow(
@@ -283,7 +294,20 @@ def advance_workflow(input_data: AdvanceWorkflowInput, ctx: Context) -> str:
 
 @mcp.tool()
 def resume_workflow(input_data: ResumeWorkflowInput, ctx: Context) -> str:
-    """Reconnects to an existing workflow instance."""
+    """
+    Reconnects to an existing workflow instance, potentially reconciling state.
+
+    This tool is used by the AI Client (e.g., the AI assistant executing the workflow)
+    to resume a workflow that might have been interrupted or is being picked up in a new session.
+    The AI Client provides the instance ID, its assumed current step, and a report of its current state.
+    The Orchestrator (this MCP server) reconciles this with the persisted state
+    and determines the next step.
+
+    The response contains the 'next_step' with 'instructions'. The AI Client (the assistant)
+    MUST follow these instructions precisely to interact with the end User
+    or perform other required actions. Accurate execution and reporting are
+    essential for correct workflow progression.
+    """
     try:
         engine = _get_engine(ctx)
         result = engine.resume_workflow(
@@ -315,6 +339,25 @@ def resume_workflow(input_data: ResumeWorkflowInput, ctx: Context) -> str:
                 "error": f"An unexpected error occurred while resuming workflow instance '{input_data.instance_id}'."
             }
         )
+
+
+@mcp.tool()
+def get_howto_create_workflow_content(ctx: Context) -> str:
+    """Returns the content of the howto_create_workflow.md documentation file."""
+    try:
+        # Construct the absolute path to the documentation file
+        server_dir = os.path.dirname(__file__)
+        docs_path = os.path.join(
+            server_dir, "..", "..", "docs", "howto_create_workflow.md"
+        )
+        with open(docs_path, "r") as f:
+            content = f.read()
+        return content
+    except FileNotFoundError:
+        return json.dumps({"error": "File 'docs/howto_create_workflow.md' not found."})
+    except Exception as e:
+        print(f"Error reading howto_create_workflow.md: {e}", file=sys.stderr)
+        return json.dumps({"error": f"Failed to read documentation file: {e}"})
 
 
 # --- Main Execution ---
