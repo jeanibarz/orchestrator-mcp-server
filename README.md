@@ -59,11 +59,14 @@ Workflows are defined in subdirectories within the `WORKFLOW_DEFINITIONS_DIR` di
 
 **Available Workflows:**
 
+*   ANALYZE_GITLAB_ISSUE
+*   COMMIT_SUGGESTER
 *   JOKE_GENERATOR
 *   README_FRESHNESS_CHECK
 *   REFACTOR_WITH_TESTS
 *   RESUME
 *   SAVE
+*   SUGGEST_REFACTORING
 *   WORKFLOW_CREATOR
 
 (See [`docs/architecture_and_data_model.md#8-workflow-definition-service-details`](docs/architecture_and_data_model.md#8-workflow-definition-service-details) for more on the definition format).
