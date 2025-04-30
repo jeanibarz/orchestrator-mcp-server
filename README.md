@@ -48,7 +48,7 @@ graph LR
 *   **State Persistence Module:** Manages workflow state and history in the SQLite database (`workflow_state.db`).
 *   **AI Interaction Module:** Communicates with the external LLM service.
 
-(See `docs/architecture_and_data_model.md` for full details).
+(See [`docs/architecture_and_data_model.md#2-high-level-architecture`](docs/architecture_and_data_model.md#2-high-level-architecture) for full details).
 
 ## Workflows
 
@@ -59,11 +59,14 @@ Workflows are defined in subdirectories within the `WORKFLOW_DEFINITIONS_DIR` di
 
 **Available Workflows:**
 
+*   JOKE_GENERATOR
+*   README_FRESHNESS_CHECK
 *   REFACTOR_WITH_TESTS
 *   RESUME
 *   SAVE
+*   WORKFLOW_CREATOR
 
-(See `docs/architecture_and_data_model.md#8-workflow-definition-service-details` for more on the definition format).
+(See [`docs/architecture_and_data_model.md#8-workflow-definition-service-details`](docs/architecture_and_data_model.md#8-workflow-definition-service-details) for more on the definition format).
 
 ## MCP Tools
 
@@ -79,7 +82,7 @@ This server provides the following MCP tools:
 *   **`resume_workflow`**: Reconnects to an existing workflow instance, providing the client's assumed state for reconciliation.
     *   Input: `{ "instance_id": "string", "assumed_current_step_name": "string", "report": { ... }, "context_updates": {} }`
 
-(Refer to the MCP server definition or `docs/architecture_and_data_model.md#7-api-specification` for detailed input/output schemas, noting the mapping from HTTP API to MCP tools).
+(Refer to the MCP server definition or [`docs/architecture_and_data_model.md#7-api-specification`](docs/architecture_and_data_model.md#7-api-specification) for detailed input/output schemas, noting the mapping from HTTP API to MCP tools).
 
 ## Configuration
 
@@ -145,4 +148,4 @@ Remember to replace `"YOUR_USERNAME"` with your actual username and `"YOUR_ANONY
 
 The primary testing strategy involves integration tests exercising the API and core components, using a **stubbed AI Interaction Module** to provide deterministic responses. A dedicated test database is used. Unit tests cover specific utility functions and parsing logic.
 
-(See `docs/architecture_and_data_model.md#12-testing-strategy` for details).
+(See [`docs/architecture_and_data_model.md#12-testing-strategy`](docs/architecture_and_data_model.md#12-testing-strategy) for details).
