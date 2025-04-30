@@ -2,6 +2,7 @@ Based on the codebase, to create a workflow, you need to create a specific direc
 
 For example, if you want to create a workflow named "MY_WORKFLOW", you would create:
 
+```
 workflows/
 └── MY_WORKFLOW/
     ├── index.md              # Required: Overview and step list
@@ -9,6 +10,8 @@ workflows/
         ├── step1_name.md     # e.g., greet_user.md
         ├── step2_name.md
         └── ...
+```
+
 File Contents
 1. index.md
 The index.md file should contain:
