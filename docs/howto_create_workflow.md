@@ -1,8 +1,5 @@
 Based on the codebase, to create a workflow, you need to create a specific directory structure and files that follow the workflow definition format used by the Workflow Definition Service.
 
-Directory Structure
-You need to create the following directory structure: architecture_and_data_model.md:916-923
-
 For example, if you want to create a workflow named "MY_WORKFLOW", you would create:
 
 workflows/
