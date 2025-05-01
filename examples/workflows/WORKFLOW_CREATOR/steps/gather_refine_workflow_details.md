@@ -7,4 +7,4 @@ If the user provides a workflow name but no refinement details, read the workflo
 Otherwise, stay on this step to gather more information.
 
 # Client Instructions
-Ask the user for the name of the workflow they want to refine and what changes or additions they would like to make. If the user provides a workflow name, read the `index.md` and step files for that workflow to understand its current structure and provide context to the user.
+Check the context for the workflow name and refinement details. If they are present, acknowledge the provided details and ask if anything is missing or needs to be changed. If some details are missing, ask for the specific missing information. If no details are present, ask the user for the name of the workflow they want to refine and what changes or additions they would like to make. If the user provides a workflow name, read the `index.md` and step files for that workflow to understand its current structure and provide context to the user.
